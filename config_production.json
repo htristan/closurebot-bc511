@@ -1,9 +1,9 @@
 {
   "db_name": "BC511-ClosureDB",
   "function_name": "ClosureBot-BC511",
-  "Thread-LowerMainland": 111,
-  "Thread-VancouverIsland": 111,
-  "Thread-CatchAll": 111,
+  "Thread-LowerMainland": 1321514689053589524,
+  "Thread-VancouverIsland": 1321514819626471565,
+  "Thread-CatchAll": 1321514987532849213,
   "license_notice": "Contains information licensed under the Open Government Licence – British Columbia.",
   "timezone": "US/Pacific",
   "filter_keywords": ["closed", "detour", "road closure", "road closed", "both lanes", "hov lane blocked", "full closure" , "all lanes closed", "both directions blocked", "impassable"]
