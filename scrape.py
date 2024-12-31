@@ -143,13 +143,14 @@ def contains_keywords(description, keywords=FILTER_KEYWORDS):
         keywords (list, optional): A list of keywords to search for. Defaults to FILTER_KEYWORDS.
 
     Returns:
-        bool: True if any keyword is found in the description; False otherwise.
+        tuple: A tuple containing (bool, str) where the bool indicates if a keyword was found,
+              and the str contains the matched keyword (or None if no match)
     """
     description = description.lower()
     for keyword in keywords:
         if keyword.lower() in description:
-            return True
-    return False
+            return True, keyword
+    return False, None
 
 def post_to_discord(event, post_type, threadName, point=None):
     """
@@ -236,6 +237,9 @@ def post_to_discord(event, post_type, threadName, point=None):
         else:
             embed.add_embed_field(name="Map Links", value=f"[DriveBC]({url511}) | [WME]({url_wme}) | [Livemap]({url_livemap})", inline=False)
 
+    # Add matched keyword if it exists
+    if 'matched_keyword' in event:
+        embed.add_embed_field(name="Matched Keyword", value=event['matched_keyword'], inline=False)
 
     # Set Footer
     embed.set_footer(text=config['license_notice'])
@@ -263,7 +267,6 @@ def post_to_discord(event, post_type, threadName, point=None):
     )
     webhook.add_embed(embed)
     webhook.execute()
-
 def fetch_all_events():
     base_url = "https://api.open511.gov.bc.ca/events"
     limit = 300  # Define the limit per API call
@@ -347,7 +350,8 @@ def check_and_post_events():
             #If the event is not in the DynamoDB table
             if not dbResponse['Items']:
                 # If the event is new, apply the keyword filter
-                if not contains_keywords(description):
+                has_keywords, matched_keyword = contains_keywords(description)
+                if not has_keywords:
                     continue  # Skip if keywords are not found
                 # Set the EventID key in the event data
                 event['EventID'] = event['id']
@@ -356,10 +360,14 @@ def check_and_post_events():
                 # set LastTouched
                 event['lastTouched'] = utc_timestamp
                 event['DetectedPolygon'] = detectedPolygon
+                # Add the matched keyword to the event (temporary)
+                event['matched_keyword'] = matched_keyword
                 # Convert float values in the event to Decimal
                 event = float_to_decimal(event)
                 # If the event is within the specified area and has not been posted before, post it to Discord
                 post_to_discord(event,'closure',detectedPolygon,point)
+                # Remove the matched_keyword before storing in DynamoDB (optional)
+                event.pop('matched_keyword', None)
                 # Add the event ID to the DynamoDB table
                 table.put_item(Item=event)
             else:
@@ -375,7 +383,7 @@ def check_and_post_events():
                         event['EventID'] = event['id']
                         event['isActive'] = 1
                         event['lastTouched'] = utc_timestamp
-                        event['DetectedPolygon'] = check_which_polygon_point(point)
+                        event['DetectedPolygon'] = check_which_polygon(area_name)
                         # It's different, so we should fire an update notification
                         post_to_discord(event,'update',detectedPolygon,point)
                         table.put_item(Item=event)
