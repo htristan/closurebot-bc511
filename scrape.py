@@ -4,6 +4,7 @@ import time
 import boto3
 from boto3.dynamodb.conditions import Attr
 from boto3.dynamodb.conditions import Key
+from boto3.exceptions import NoCredentialsError, PartialCredentialsError
 from shapely.geometry import Point, Polygon, LineString
 from decimal import Decimal
 from discord_webhook import DiscordWebhook, DiscordEmbed
