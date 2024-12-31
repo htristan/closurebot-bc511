@@ -25,6 +25,7 @@ jobs:
         fi
 
     - name: Set environment variables
+      id: env_vars
       run: ./set_env_vars.sh
 
     - name: Set up Python
@@ -52,4 +53,4 @@ jobs:
 
     - name: Deploy to AWS Lambda
       run: |
-        aws lambda update-function-code --function-name $FUNCTION_NAME --zip-file fileb://function.zip | jq 'del(.Environment)' | cat
+        aws lambda update-function-code --function-name ${{ steps.env_vars.outputs.FUNCTION_NAME }} --zip-file fileb://function.zip | jq 'del(.Environment)' | cat
