@@ -217,7 +217,7 @@ def post_to_discord(event, post_type, threadName, point=None):
         )
         embed.add_embed_field(name="Affected Roads", value=road_info, inline=False)
         # Append additional info to the title
-        additional_info = roads[0].get("name", {}).get("S", "")
+        additional_info = roads[0].get("name", "")
         if additional_info == "Other Roads":
             # Use regex to extract the road name from the description
             description = event.get("description", "")
