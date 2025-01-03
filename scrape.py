@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, date
 import calendar
 from pytz import timezone
 import random
+import re
 
 # Load the configuration file
 with open('config.json', 'r') as f:
@@ -163,7 +164,7 @@ def post_to_discord(event, post_type, threadName, point=None):
 
     # Get the title and color based on the post type
     post_types = {
-        "closure": {"title": "New Event Detected", "color": 15548997},
+        "closure": {"title": "New Event", "color": 15548997},
         "update": {"title": "Event Updated", "color": 16753920},
         "archived": {"title": "Event Cleared", "color": 52224},
     }
@@ -215,6 +216,15 @@ def post_to_discord(event, post_type, threadName, point=None):
             ]
         )
         embed.add_embed_field(name="Affected Roads", value=road_info, inline=False)
+        # Append additional info to the title
+        additional_info = roads[0].get("name", "")
+        if additional_info == "Other Roads":
+            # Use regex to extract the road name from the description
+            description = event.get("description", "")
+            match = re.match(r"^(.*?),", description)
+            if match:
+                additional_info = match.group(1)
+        embed.title += f" - {additional_info}"
 
     # Add Description
     embed.add_embed_field(name="Description", value=event.get("description", "No description provided"), inline=False)
