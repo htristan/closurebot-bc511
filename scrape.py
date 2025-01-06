@@ -14,6 +14,19 @@ import calendar
 from pytz import timezone
 import random
 import re
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler()  # Logs to the console
+    ]
+)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Load the configuration file
 with open('config.json', 'r') as f:
@@ -375,6 +388,7 @@ def check_and_post_events():
                 event['matched_keyword'] = matched_keyword
                 # Convert float values in the event to Decimal
                 event = float_to_decimal(event)
+                logging.info(f"Posting New EventID: {event['EventID']}")
                 # If the event is within the specified area and has not been posted before, post it to Discord
                 post_to_discord(event,'closure',detectedPolygon,point)
                 # Remove the matched_keyword before storing in DynamoDB (optional)
@@ -386,16 +400,17 @@ def check_and_post_events():
                 # First, let's see if it has a lastupdated time
                 event = float_to_decimal(event)
                 stored_event = dbResponse['Items'][0]
-                lastUpdated = stored_event.get('LastUpdated')
+                lastUpdated = stored_event.get('updated')
                 if lastUpdated != None:
                     # Now, see if the version we stored is different
-                    if lastUpdated != stored_event['LastUpdated']:
+                    if lastUpdated != event['updated']:
                         # Store the most recent updated time:
                         event['EventID'] = event['id']
                         event['isActive'] = 1
                         event['lastTouched'] = utc_timestamp
-                        event['DetectedPolygon'] = check_which_polygon(area_name)
+                        event['DetectedPolygon'] = detectedPolygon
                         # It's different, so we should fire an update notification
+                        logging.info(f"Posting Updated EventID: {event['EventID']}")
                         post_to_discord(event,'update',detectedPolygon,point)
                         table.put_item(Item=event)
                 # get the lasttouched time
