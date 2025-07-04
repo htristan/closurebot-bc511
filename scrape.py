@@ -249,7 +249,7 @@ def post_to_discord(event, post_type, threadName, point=None):
     embed.add_embed_field(name="Last Updated", value=updated_time)
 
     driveBCID = event['id'].split("/")[-1]
-    url511 = f"https://www.drivebc.ca/mobile/pub/events/id/{driveBCID}.html"
+    url511 = f"https://www.drivebc.ca/?type=event&id={driveBCID}"
     # Add Geo Information and Map Links
     if point:
         latitude = point.y
