@@ -94,10 +94,9 @@ def test_unix_to_readable_with_timezone(iso_timestamp, expected_time):
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_closure(mock_webhook, sample_event, mock_config):
     # Update sample event to have required fields
-    sample_event['id'] = sample_event['ID']  # Map ID to id
-    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['event_type'] = sample_event.get('eventType', 'roadwork')
     sample_event['severity'] = 'MODERATE'
-    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['description'] = sample_event.get('description', 'Test description')
     sample_event['created'] = '2023-01-01T12:00:00Z'
     sample_event['updated'] = '2023-01-01T12:00:00Z'
     
@@ -110,10 +109,9 @@ def test_post_to_discord_closure(mock_webhook, sample_event, mock_config):
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_updated(mock_webhook, sample_event, mock_config):
     # Update sample event to have required fields
-    sample_event['id'] = sample_event['ID']  # Map ID to id
-    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['event_type'] = sample_event.get('eventType', 'roadwork')
     sample_event['severity'] = 'MODERATE'
-    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['description'] = sample_event.get('description', 'Test description')
     sample_event['created'] = '2023-01-01T12:00:00Z'
     sample_event['updated'] = '2023-01-01T12:00:00Z'
     
@@ -126,10 +124,9 @@ def test_post_to_discord_updated(mock_webhook, sample_event, mock_config):
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_completed(mock_webhook, sample_event, mock_config):
     # Update sample event to have required fields
-    sample_event['id'] = sample_event['ID']  # Map ID to id
-    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['event_type'] = sample_event.get('eventType', 'roadwork')
     sample_event['severity'] = 'MODERATE'
-    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['description'] = sample_event.get('description', 'Test description')
     sample_event['created'] = '2023-01-01T12:00:00Z'
     sample_event['updated'] = '2023-01-01T12:00:00Z'
     
@@ -216,11 +213,10 @@ def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sampl
     # Update sample events to match expected structure
     for event in sample_events:
         event['status'] = 'ACTIVE'
-        event['id'] = event['ID']  # Map ID to id
-        event['geography'] = {'type': 'Point', 'coordinates': [-75.69528, 45.40719], 'areas': [{'name': 'Lower Mainland District'}]}
-        event['event_type'] = event.get('EventType', 'roadwork')
+        event['geography'] = {'type': 'Point', 'coordinates': [-123.1207, 49.2827], 'areas': [{'name': 'Lower Mainland District'}]}
+        event['event_type'] = event.get('eventType', 'roadwork')
         event['severity'] = 'MODERATE'
-        event['description'] = event.get('Description', 'Test description')
+        event['description'] = event.get('description', 'Test description')
         event['created'] = '2023-01-01T12:00:00Z'
         event['updated'] = '2023-01-01T12:00:00Z'
     

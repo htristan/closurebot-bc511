@@ -8,8 +8,8 @@ def create_event_fixture():
     # Create directory if it doesn't exist
     os.makedirs('tests/fixtures', exist_ok=True)
     
-    # Rest of the function remains the same
-    response = requests.get("https://511on.ca/api/v2/get/event")
+    # Get events from BC 511 API
+    response = requests.get("https://api.open511.gov.bc.ca/events")
     if response.ok:
         events = json.loads(response.text)[:3]
         
