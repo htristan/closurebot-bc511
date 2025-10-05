@@ -12,10 +12,10 @@ import os
 os.environ['DISCORD_WEBHOOK'] = 'https://mock-discord-webhook.com/test'
 
 from scrape import (
-    check_which_polygon_point, getThreadID, unix_to_readable,
-    post_to_discord_closure, post_to_discord_updated, post_to_discord_completed,
+    check_which_polygon, getThreadID, unix_to_readable_with_timezone,
+    post_to_discord,
     close_recent_events, cleanup_old_events, float_to_decimal,
-    check_and_post_events, generate_geojson
+    check_and_post_events
 )
 
 # Load fixture data
@@ -52,10 +52,8 @@ def mock_dynamodb_table():
 @pytest.fixture
 def mock_config():
     return {
-        'Thread-GTA': '123456',
-        'Thread-Central_EasternOntario': '234567',
-        'Thread-NorthernOntario': '345678',
-        'Thread-SouthernOntario': '456789',
+        'Thread-LowerMainland': '123456',
+        'Thread-VancouverIsland': '234567',
         'Thread-CatchAll': '567890',
         'timezone': 'US/Eastern',
         'license_notice': 'Test License Notice',
@@ -63,24 +61,19 @@ def mock_config():
     }
 
 # Polygon Tests
-@pytest.mark.parametrize("coordinates,expected_region", [
-    ((43.6532, -79.3832), 'GTA'),  # Toronto
-    ((45.4215, -75.6972), 'Central & Eastern Ontario'),  # Ottawa
-    ((46.4917, -80.9930), 'Northern Ontario'),  # Sudbury
-    ((43.2557, -79.8711), 'Southern Ontario'),  # Hamilton
-    ((0, 0), 'Other'),  # Invalid point
+@pytest.mark.parametrize("area_name,expected_region", [
+    ('Lower Mainland District', 'LowerMainland'),
+    ('Vancouver Island District', 'VancouverIsland'),
+    ('Unknown District', 'Other'),
+    ('Some Other Area', 'Other'),
 ])
-def test_check_which_polygon_point(coordinates, expected_region):
-    from shapely.geometry import Point
-    point = Point(coordinates[0], coordinates[1])
-    assert check_which_polygon_point(point) == expected_region
+def test_check_which_polygon(area_name, expected_region):
+    assert check_which_polygon(area_name) == expected_region
 
 # Thread ID Tests
 @pytest.mark.parametrize("region,expected_thread", [
-    ('GTA', '123456'),
-    ('Central & Eastern Ontario', '234567'),
-    ('Northern Ontario', '345678'),
-    ('Southern Ontario', '456789'),
+    ('LowerMainland', '123456'),
+    ('VancouverIsland', '234567'),
     ('Other', '567890'),
     ('Invalid', '567890'),
 ])
@@ -89,35 +82,59 @@ def test_getThreadID(region, expected_thread, mock_config):
         assert getThreadID(region) == expected_thread
 
 # Time Conversion Tests
-@pytest.mark.parametrize("timestamp,expected_time", [
-    (1672574400, '2023-Jan-01 07:00 AM'),  # Regular case
-    (1672531200, '2022-Dec-31 07:00 PM'),  # Corrected expected time
+@pytest.mark.parametrize("iso_timestamp,expected_time", [
+    ('2023-01-01T12:00:00Z', '2023-Jan-01 12:00 PM'),  # UTC to Eastern
+    ('2022-12-31T00:00:00Z', '2022-Dec-31 12:00 AM'),  # UTC to Eastern
 ])
 @freeze_time("2023-01-01 12:00:00", tz_offset=0)
-def test_unix_to_readable(timestamp, expected_time):
-    assert unix_to_readable(timestamp) == expected_time
+def test_unix_to_readable_with_timezone(iso_timestamp, expected_time):
+    assert unix_to_readable_with_timezone(iso_timestamp) == expected_time
 
 # Discord Posting Tests
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_closure(mock_webhook, sample_event, mock_config):
+    # Update sample event to have required fields
+    sample_event['id'] = sample_event['ID']  # Map ID to id
+    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['severity'] = 'MODERATE'
+    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['created'] = '2023-01-01T12:00:00Z'
+    sample_event['updated'] = '2023-01-01T12:00:00Z'
+    
     with patch('scrape.config', mock_config):
-        post_to_discord_closure(sample_event, 'GTA')
+        post_to_discord(sample_event, 'closure', 'LowerMainland')
         mock_webhook.assert_called_once()
         webhook_instance = mock_webhook.return_value
         webhook_instance.execute.assert_called_once()
 
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_updated(mock_webhook, sample_event, mock_config):
+    # Update sample event to have required fields
+    sample_event['id'] = sample_event['ID']  # Map ID to id
+    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['severity'] = 'MODERATE'
+    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['created'] = '2023-01-01T12:00:00Z'
+    sample_event['updated'] = '2023-01-01T12:00:00Z'
+    
     with patch('scrape.config', mock_config):
-        post_to_discord_updated(sample_event, 'GTA')
+        post_to_discord(sample_event, 'update', 'LowerMainland')
         mock_webhook.assert_called_once()
         webhook_instance = mock_webhook.return_value
         webhook_instance.execute.assert_called_once()
 
 @patch('scrape.DiscordWebhook')
 def test_post_to_discord_completed(mock_webhook, sample_event, mock_config):
+    # Update sample event to have required fields
+    sample_event['id'] = sample_event['ID']  # Map ID to id
+    sample_event['event_type'] = sample_event.get('EventType', 'roadwork')
+    sample_event['severity'] = 'MODERATE'
+    sample_event['description'] = sample_event.get('Description', 'Test description')
+    sample_event['created'] = '2023-01-01T12:00:00Z'
+    sample_event['updated'] = '2023-01-01T12:00:00Z'
+    
     with patch('scrape.config', mock_config):
-        post_to_discord_completed(sample_event, 'GTA')
+        post_to_discord(sample_event, 'archived', 'LowerMainland')
         mock_webhook.assert_called_once()
         webhook_instance = mock_webhook.return_value
         webhook_instance.execute.assert_called_once()
@@ -167,15 +184,16 @@ def test_close_recent_events(sample_db_items):
     # Ensure we have an active item
     active_item = sample_db_items[0].copy()
     active_item['isActive'] = 1
+    from decimal import Decimal
+    active_item['geography'] = {'type': 'Point', 'coordinates': [Decimal('-75.69528'), Decimal('45.40719')]}
     table.put_item(Item=active_item)
 
     # Mock API response with empty list (no active events)
-    mock_response = Mock()
-    mock_response.text = json.dumps([])  # Empty list means no current events
+    mock_data = {'events': []}  # Proper data structure
 
     with patch('scrape.table', table), \
-         patch('scrape.post_to_discord_completed') as mock_post:
-        close_recent_events(mock_response)
+         patch('scrape.post_to_discord') as mock_post:
+        close_recent_events(mock_data)
         mock_post.assert_called_once()
 
 # Utility Function Tests
@@ -192,15 +210,22 @@ def test_float_to_decimal(sample_event):
                     assert isinstance(result[key][nested_key], Decimal)
 
 # Main Function Test
-@patch('scrape.requests.get')
-@patch('scrape.post_to_discord_closure')
-def test_check_and_post_events(mock_post, mock_get, mock_dynamodb_table, sample_events):
-    # Modify sample event to ensure it triggers a post
-    sample_events[0]['IsFullClosure'] = True
+@patch('scrape.fetch_all_events')
+@patch('scrape.post_to_discord')
+def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sample_events):
+    # Update sample events to match expected structure
+    for event in sample_events:
+        event['status'] = 'ACTIVE'
+        event['id'] = event['ID']  # Map ID to id
+        event['geography'] = {'type': 'Point', 'coordinates': [-75.69528, 45.40719], 'areas': [{'name': 'Lower Mainland District'}]}
+        event['event_type'] = event.get('EventType', 'roadwork')
+        event['severity'] = 'MODERATE'
+        event['description'] = event.get('Description', 'Test description')
+        event['created'] = '2023-01-01T12:00:00Z'
+        event['updated'] = '2023-01-01T12:00:00Z'
     
-    # Mock API response
-    mock_get.return_value.ok = True
-    mock_get.return_value.text = json.dumps(sample_events)
+    # Mock fetch_all_events to return proper structure
+    mock_fetch.return_value = {'events': sample_events}
     
     # Mock the database query to return no existing items
     mock_dynamodb_table.query.return_value = {'Items': []}
@@ -214,10 +239,9 @@ def test_check_and_post_events(mock_post, mock_get, mock_dynamodb_table, sample_
         assert mock_post.call_count > 0
 
 # Error Handling Tests
-def test_check_which_polygon_point_invalid_input():
-    from shapely.geometry import Point
-    point = Point(0, 0)  # Use valid coordinates that should return 'Other'
-    assert check_which_polygon_point(point) == 'Other'
+def test_check_which_polygon_invalid_input():
+    # Test with invalid area name
+    assert check_which_polygon('Invalid Area') == 'Other'
 
 @mock_aws
 @patch('scrape.requests.get')
@@ -233,5 +257,5 @@ def test_check_and_post_events_api_error(mock_get):
     
     with patch('scrape.table', table):
         mock_get.return_value.ok = False
-        with pytest.raises(Exception, match='Issue connecting to ON511 API'):
+        with pytest.raises(Exception, match='Error connecting to BC511 API'):
             check_and_post_events()
