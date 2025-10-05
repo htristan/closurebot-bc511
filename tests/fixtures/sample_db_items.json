@@ -1,0 +1,61 @@
+[
+  {
+    "EventID": "drivebc.ca/DBC-82200",
+    "ID": "drivebc.ca/DBC-82200",
+    "Status": "ACTIVE",
+    "DetectedPolygon": "Cariboo District",
+    "EventType": "CONSTRUCTION",
+    "Severity": "MINOR",
+    "Description": "Highway 97 (Cariboo Connector), in both directions. Utility work between Exeter Station Rd and Spring Lake Rd for 17.6 km (100 Mile House). Until Fri Oct 31. From 8:00 AM to 4:00 PM PDT on weekdays. Single lane alternating traffic. Last updated Wed Oct 1 at 5:00 PM PDT. (DBC-82200)",
+    "Created": "2025-10-01T17:00:40-07:00",
+    "Updated": "2025-10-01T17:00:40-07:00",
+    "LastUpdated": 1727812800,
+    "isActive": 0,
+    "geography": {
+      "type": "LineString",
+      "coordinates": [
+        ["-121.296354", "51.650034"],
+        ["-121.296237", "51.650347"],
+        ["-121.295939", "51.651152"]
+      ]
+    }
+  },
+  {
+    "EventID": "drivebc.ca/DBC-79749",
+    "ID": "drivebc.ca/DBC-79749",
+    "Status": "ACTIVE",
+    "DetectedPolygon": "Vancouver Island District",
+    "EventType": "CONSTRUCTION",
+    "Severity": "MAJOR",
+    "Description": "Tamany Dr, northbound. Construction work at Keating Cross Rd in Saanich. Until Fri Oct 31. Road closed. Watch for traffic control. Tamany Rd will be closed at Keating Cross Rd as part of the Highway 17 Keating Cross Flyover Project. Next update time Thu Oct 30 at 9:00 AM PDT. Last updated Fri Jul 25 at 9:25 PM PDT. (DBC-79749)",
+    "Created": "2025-07-25T21:25:07-07:00",
+    "Updated": "2025-07-27T00:00:00-07:00",
+    "LastUpdated": 1727812800,
+    "isActive": 0,
+    "geography": {
+      "type": "Point",
+      "coordinates": ["-123.399912", "48.564989"]
+    }
+  },
+  {
+    "EventID": "drivebc.ca/DBC-78197",
+    "ID": "drivebc.ca/DBC-78197",
+    "Status": "ACTIVE",
+    "DetectedPolygon": "Lower Mainland District",
+    "EventType": "CONSTRUCTION",
+    "Severity": "MINOR",
+    "Description": "Highway 7B (Mary Hill Bypass), westbound. Construction work between Coast Meridian Rd and Broadway St for 0.6 km (Port Coquitlam). Until Fri Oct 31. From 9:00 AM to 3:00 PM PDT daily. Lane Closure. Bus Stop Improvement project. Last updated Wed Jun 18 at 1:02 PM PDT. (DBC-78197)",
+    "Created": "2025-06-18T13:02:33-07:00",
+    "Updated": "2025-06-19T00:00:00-07:00",
+    "LastUpdated": 1727812800,
+    "isActive": 0,
+    "geography": {
+      "type": "LineString",
+      "coordinates": [
+        ["-122.762273", "49.240488"],
+        ["-122.76183", "49.240718"],
+        ["-122.761462", "49.240909"]
+      ]
+    }
+  }
+]
