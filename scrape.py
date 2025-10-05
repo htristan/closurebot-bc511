@@ -12,10 +12,10 @@ import os
 from datetime import datetime, timedelta, date
 import calendar
 from pytz import timezone
+import logging
 import random
 import re
 import logging
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,7 @@ logging.basicConfig(
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
 
 # Load the configuration file
 with open('config.json', 'r') as f:
@@ -41,7 +42,6 @@ discordAvatarURL = "https://pbs.twimg.com/profile_images/961736998745600000/Zrqm
 
 # Fetch filter keywords from the config file
 FILTER_KEYWORDS = config.get('filter_keywords', [])
-
 # Fallback mechanism for credentials
 try:
     # Use environment variables if they exist
@@ -62,8 +62,15 @@ except (NoCredentialsError, PartialCredentialsError):
 # Specify the name of your DynamoDB table
 table = dynamodb.Table(config['db_name'])
 
+utc_timestamp = None
+
+def update_utc_timestamp():
+    global utc_timestamp
+    utc_timestamp = calendar.timegm(datetime.utcnow().timetuple())
+
 # set the current UTC timestamp for use in a few places
-utc_timestamp = calendar.timegm(datetime.utcnow().timetuple())
+update_utc_timestamp()
+
 
 def float_to_decimal(data):
     """
@@ -372,6 +379,7 @@ def check_and_post_events():
             description = event.get("description", "")
 
             #If the event is not in the DynamoDB table
+            update_utc_timestamp()
             if not dbResponse['Items']:
                 # If the event is new, apply the keyword filter
                 has_keywords, matched_keyword = contains_keywords(description)
@@ -413,8 +421,13 @@ def check_and_post_events():
                         logging.info(f"Posting Updated EventID: {event['EventID']}")
                         post_to_discord(event,'update',detectedPolygon,point)
                         table.put_item(Item=event)
-                # get the lasttouched time
-                lastTouched_datetime = datetime.fromtimestamp(int(dbResponse['Items'][0].get('lastTouched')))
+                # Get the lastTouched time
+                lastTouched = dbResponse['Items'][0].get('lastTouched')
+                if lastTouched is None:
+                    logging.warning(f"EventID: {event['ID']} - Missing lastTouched. Setting it now.")
+                    lastTouched_datetime = now
+                else:
+                    lastTouched_datetime = datetime.fromtimestamp(int(lastTouched))
                 # store the current time now
                 now = datetime.fromtimestamp(utc_timestamp)
                 # Compute the difference in minutes between now and lastUpdated
@@ -423,6 +436,10 @@ def check_and_post_events():
                 variability = random.uniform(-2, 2)  # random float between -2 and 2
                 # Add variability to the time difference
                 time_diff_min += variability
+                # Log calculated time difference and variability
+                logging.info(
+                    f"EventID: {event['id']}, TimeDiff: {time_diff_min:.2f} minutes (Variability: {variability:.2f}), LastTouched: {lastTouched_datetime}, Now: {now}"
+                )
                 # If time_diff_min > 5, then more than 5 minutes have passed (considering variability)
                 if abs(time_diff_min) > 5:
                     # let's store that we just saw it to keep track of the last touch time
@@ -431,6 +448,9 @@ def check_and_post_events():
                         UpdateExpression="SET lastTouched = :val",
                         ExpressionAttributeValues={':val': utc_timestamp}
                     )
+                    logging.info(f"EventID: {event['id']} - lastTouched updated successfully.")
+                # else:
+                #     logging.info(f"EventID: {event['ID']} - No update needed. TimeDiff: {time_diff_min:.2f}")
 
 def close_recent_events(data):
     # Ensure the expected structure is present
@@ -497,7 +517,7 @@ def cleanup_old_events():
         for item in response['Items']:
             table.delete_item(
                 Key={
-                    'EventID': item['EventID']
+                    'EventID': str(item['EventID'])
                 }
             )
         # If the scan returned a LastEvaluatedKey, continue the scan from where it left off
@@ -529,9 +549,12 @@ def update_last_execution_day():
         }
     )
 
+
 def lambda_handler(event, context):
     check_and_post_events()
 
 if __name__ == "__main__":
-    print("Running as a standalone script...")
-    check_and_post_events()
+    # Simulate the Lambda environment by passing an empty event and context
+    event = {}
+    context = None
+    lambda_handler(event, context)
