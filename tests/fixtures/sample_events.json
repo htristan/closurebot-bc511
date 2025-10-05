@@ -1,68 +1,797 @@
 [
   {
-    "id": "BC--34769",
-    "organization": "BCMoTI",
-    "roadwayName": "Highway 1",
-    "directionOfTravel": "Westbound",
-    "description": "Construction on HWY 1 Westbound at LOUGHEED HWY, Burnaby. ALL LANES CLOSED.",
-    "reported": 1629691200,
-    "lastUpdated": 1720635404,
-    "startDate": 1629691200,
-    "plannedEndDate": 1763787540,
-    "lanesAffected": "ALL LANES CLOSED",
-    "latitude": 49.2827,
-    "longitude": -123.1207,
-    "latitudeSecondary": 0.0,
-    "longitudeSecondary": 0.0,
-    "eventType": "roadwork",
-    "isFullClosure": false,
-    "comment": "",
-    "recurrence": "",
-    "recurrenceSchedules": "",
-    "linkId": "1194945213"
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/DBC-82200",
+    "id": "drivebc.ca/DBC-82200",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2025-10-01T17:00:40-07:00",
+    "updated": "2025-10-01T17:00:40-07:00",
+    "description": "Highway 97 (Cariboo Connector), in both directions. Utility work between Exeter Station Rd and Spring Lake Rd for 17.6 km (100 Mile House). Until Fri Oct 31. From 8:00 AM to 4:00 PM PDT on weekdays. Single lane alternating traffic. Last updated Wed Oct 1 at 5:00 PM PDT. (DBC-82200)",
+    "+ivr_message": "Highway 97 (Cariboo Connector), in both directions. Utility work between Exeter Station Rd and Spring Lake Rd for 17.6 km (100 Mile House). Until Friday, October 31. From 8:00 AM to 4:00 PM on weekdays. Single lane alternating traffic. Last updated Wednesday, October 1 at 5:00 PM.",
+    "+linear_reference_km": 399.31,
+    "schedule": {
+      "recurring_schedules": [
+        {
+          "days": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "start_date": "2025-10-01",
+          "daily_start_time": "08:00",
+          "end_date": "2025-11-01",
+          "daily_end_time": "16:00"
+        }
+      ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+      "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+      "type": "LineString",
+      "coordinates": [
+        [
+          -121.296354,
+          51.650034
+        ],
+        [
+          -121.296237,
+          51.650347
+        ],
+        [
+          -121.295939,
+          51.651152
+        ],
+        [
+          -121.295318,
+          51.652262
+        ],
+        [
+          -121.295344,
+          51.652353
+        ],
+        [
+          -121.294901,
+          51.653079
+        ],
+        [
+          -121.294214,
+          51.654203
+        ],
+        [
+          -121.293879,
+          51.654599
+        ],
+        [
+          -121.293402,
+          51.655038
+        ],
+        [
+          -121.292688,
+          51.655515
+        ],
+        [
+          -121.292333,
+          51.655689
+        ],
+        [
+          -121.291995,
+          51.655855
+        ],
+        [
+          -121.291198,
+          51.656141
+        ],
+        [
+          -121.289558,
+          51.656731
+        ],
+        [
+          -121.289527,
+          51.656746
+        ],
+        [
+          -121.288892,
+          51.657055
+        ],
+        [
+          -121.288311,
+          51.657475
+        ],
+        [
+          -121.287826,
+          51.657973
+        ],
+        [
+          -121.287808,
+          51.658002
+        ],
+        [
+          -121.287596,
+          51.658345
+        ],
+        [
+          -121.287571,
+          51.658385
+        ],
+        [
+          -121.287403,
+          51.658797
+        ],
+        [
+          -121.287323,
+          51.659278
+        ],
+        [
+          -121.287382,
+          51.659776
+        ],
+        [
+          -121.287578,
+          51.660342
+        ],
+        [
+          -121.289393,
+          51.66401
+        ],
+        [
+          -121.289666,
+          51.664563
+        ],
+        [
+          -121.289884,
+          51.665002
+        ],
+        [
+          -121.290196,
+          51.665642
+        ],
+        [
+          -121.290538,
+          51.666346
+        ],
+        [
+          -121.290822,
+          51.666935
+        ],
+        [
+          -121.291823,
+          51.66901
+        ],
+        [
+          -121.293024,
+          51.671498
+        ],
+        [
+          -121.29303,
+          51.671606
+        ],
+        [
+          -121.293837,
+          51.67318
+        ],
+        [
+          -121.294365,
+          51.673833
+        ],
+        [
+          -121.294895,
+          51.67434
+        ],
+        [
+          -121.295725,
+          51.674928
+        ],
+        [
+          -121.297568,
+          51.675899
+        ],
+        [
+          -121.303231,
+          51.678886
+        ],
+        [
+          -121.30916,
+          51.682545
+        ],
+        [
+          -121.309684,
+          51.682868
+        ],
+        [
+          -121.309933,
+          51.683147
+        ],
+        [
+          -121.310186,
+          51.683429
+        ],
+        [
+          -121.310704,
+          51.684006
+        ],
+        [
+          -121.310882,
+          51.684107
+        ],
+        [
+          -121.311301,
+          51.684606
+        ],
+        [
+          -121.312091,
+          51.685426
+        ],
+        [
+          -121.312829,
+          51.685987
+        ],
+        [
+          -121.313981,
+          51.686695
+        ],
+        [
+          -121.314534,
+          51.687095
+        ],
+        [
+          -121.314941,
+          51.687481
+        ],
+        [
+          -121.315353,
+          51.688011
+        ],
+        [
+          -121.3159,
+          51.688862
+        ],
+        [
+          -121.317173,
+          51.690841
+        ],
+        [
+          -121.318041,
+          51.692202
+        ],
+        [
+          -121.319033,
+          51.693756
+        ],
+        [
+          -121.319955,
+          51.695201
+        ],
+        [
+          -121.321581,
+          51.697747
+        ],
+        [
+          -121.322006,
+          51.698565
+        ],
+        [
+          -121.32223,
+          51.699417
+        ],
+        [
+          -121.32222,
+          51.700003
+        ],
+        [
+          -121.322219,
+          51.700035
+        ],
+        [
+          -121.322165,
+          51.700475
+        ],
+        [
+          -121.322108,
+          51.700646
+        ],
+        [
+          -121.321888,
+          51.701303
+        ],
+        [
+          -121.321622,
+          51.701757
+        ],
+        [
+          -121.321431,
+          51.701974
+        ],
+        [
+          -121.321286,
+          51.702206
+        ],
+        [
+          -121.31875,
+          51.70505
+        ],
+        [
+          -121.318457,
+          51.70546
+        ],
+        [
+          -121.318387,
+          51.705559
+        ],
+        [
+          -121.317958,
+          51.706443
+        ],
+        [
+          -121.317805,
+          51.707306
+        ],
+        [
+          -121.318066,
+          51.710455
+        ],
+        [
+          -121.318305,
+          51.713122
+        ],
+        [
+          -121.318548,
+          51.715201
+        ],
+        [
+          -121.318675,
+          51.715689
+        ],
+        [
+          -121.319188,
+          51.717659
+        ],
+        [
+          -121.319546,
+          51.718726
+        ],
+        [
+          -121.319686,
+          51.719051
+        ],
+        [
+          -121.319915,
+          51.719483
+        ],
+        [
+          -121.32045,
+          51.720148
+        ],
+        [
+          -121.320802,
+          51.720455
+        ],
+        [
+          -121.321085,
+          51.720703
+        ],
+        [
+          -121.322109,
+          51.721448
+        ],
+        [
+          -121.323156,
+          51.72212
+        ],
+        [
+          -121.324142,
+          51.722816
+        ],
+        [
+          -121.324684,
+          51.723352
+        ],
+        [
+          -121.325219,
+          51.72412
+        ],
+        [
+          -121.326904,
+          51.727219
+        ],
+        [
+          -121.327123,
+          51.72762
+        ],
+        [
+          -121.327382,
+          51.728075
+        ],
+        [
+          -121.327602,
+          51.728462
+        ],
+        [
+          -121.328062,
+          51.729269
+        ],
+        [
+          -121.329205,
+          51.731278
+        ],
+        [
+          -121.329882,
+          51.732467
+        ],
+        [
+          -121.330401,
+          51.733624
+        ],
+        [
+          -121.330772,
+          51.735121
+        ],
+        [
+          -121.330788,
+          51.735184
+        ],
+        [
+          -121.331115,
+          51.737484
+        ],
+        [
+          -121.331249,
+          51.738421
+        ],
+        [
+          -121.331414,
+          51.740101
+        ],
+        [
+          -121.331381,
+          51.740719
+        ],
+        [
+          -121.33128,
+          51.741287
+        ],
+        [
+          -121.330239,
+          51.744597
+        ],
+        [
+          -121.33035,
+          51.745165
+        ],
+        [
+          -121.330594,
+          51.745764
+        ],
+        [
+          -121.330896,
+          51.746203
+        ],
+        [
+          -121.331378,
+          51.746637
+        ],
+        [
+          -121.332254,
+          51.747172
+        ],
+        [
+          -121.332522,
+          51.747272
+        ],
+        [
+          -121.333253,
+          51.747545
+        ],
+        [
+          -121.3346,
+          51.747968
+        ],
+        [
+          -121.343702,
+          51.750821
+        ],
+        [
+          -121.343764,
+          51.750841
+        ],
+        [
+          -121.344994,
+          51.75114
+        ],
+        [
+          -121.345916,
+          51.751276
+        ],
+        [
+          -121.346789,
+          51.751307
+        ],
+        [
+          -121.34791,
+          51.751227
+        ],
+        [
+          -121.348807,
+          51.751084
+        ],
+        [
+          -121.3493,
+          51.751008
+        ],
+        [
+          -121.349936,
+          51.750905
+        ],
+        [
+          -121.353123,
+          51.750392
+        ],
+        [
+          -121.354285,
+          51.750258
+        ],
+        [
+          -121.354886,
+          51.750243
+        ],
+        [
+          -121.355854,
+          51.750264
+        ],
+        [
+          -121.356603,
+          51.750357
+        ],
+        [
+          -121.357568,
+          51.750558
+        ],
+        [
+          -121.358298,
+          51.750795
+        ],
+        [
+          -121.359118,
+          51.751179
+        ],
+        [
+          -121.359812,
+          51.751554
+        ],
+        [
+          -121.364946,
+          51.755669
+        ],
+        [
+          -121.365452,
+          51.756075
+        ],
+        [
+          -121.366756,
+          51.75712
+        ],
+        [
+          -121.366806,
+          51.757161
+        ],
+        [
+          -121.366993,
+          51.757282
+        ],
+        [
+          -121.367796,
+          51.757808
+        ],
+        [
+          -121.368363,
+          51.758114
+        ],
+        [
+          -121.371,
+          51.759066
+        ],
+        [
+          -121.371661,
+          51.759304
+        ],
+        [
+          -121.372151,
+          51.759544
+        ],
+        [
+          -121.374099,
+          51.760624
+        ],
+        [
+          -121.376547,
+          51.762129
+        ],
+        [
+          -121.377999,
+          51.763022
+        ],
+        [
+          -121.378355,
+          51.763259
+        ],
+        [
+          -121.378734,
+          51.763511
+        ],
+        [
+          -121.378951,
+          51.763702
+        ],
+        [
+          -121.379308,
+          51.764019
+        ],
+        [
+          -121.383659,
+          51.768449
+        ],
+        [
+          -121.384456,
+          51.76926
+        ],
+        [
+          -121.384623,
+          51.769429
+        ],
+        [
+          -121.384903,
+          51.769634
+        ],
+        [
+          -121.385368,
+          51.769974
+        ],
+        [
+          -121.387543,
+          51.771243
+        ],
+        [
+          -121.388402,
+          51.771745
+        ],
+        [
+          -121.38856,
+          51.771837
+        ],
+        [
+          -121.388929,
+          51.772047
+        ],
+        [
+          -121.391421,
+          51.773464
+        ],
+        [
+          -121.391986,
+          51.773787
+        ],
+        [
+          -121.392731,
+          51.774212
+        ]
+      ]
+    },
+    "roads": [
+      {
+        "name": "Highway 97",
+        "from": "Exeter Station Rd",
+        "to": "Spring Lake Rd",
+        "direction": "BOTH"
+      }
+    ],
+    "areas": [
+      {
+        "url": "http://www.geonames.org/8630134",
+        "name": "Cariboo District",
+        "id": "drivebc.ca/7"
+      }
+    ]
   },
   {
-    "id": "BC--220256",
-    "organization": "BCMoTI",
-    "roadwayName": "Highway 99",
-    "directionOfTravel": "Northbound",
-    "description": "Recurring-Moving Maintenance Closure on HWY 99 Northbound between KING GEORGE BLVD and 152 ST, Surrey. 1 Alternating Lane(s).",
-    "reported": 1736125200,
-    "lastUpdated": 1735573564,
-    "startDate": 1736125200,
-    "plannedEndDate": 1736596800,
-    "lanesAffected": "1 Alternating Lane(s)",
-    "latitude": 49.1913,
-    "longitude": -122.8490,
-    "latitudeSecondary": 0.0,
-    "longitudeSecondary": 0.0,
-    "eventType": "roadwork",
-    "isFullClosure": false,
-    "comment": "",
-    "recurrence": "",
-    "recurrenceSchedules": "",
-    "linkId": "117638392"
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/DBC-82273",
+    "id": "drivebc.ca/DBC-82273",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2025-10-03T16:13:21-07:00",
+    "updated": "2025-10-03T16:13:21-07:00",
+    "description": "Highway 17A, northbound. Bridge maintenance planned between 28 Ave Overpass and 34B Ave (Delta). Starting Sun Oct 5 at 11:00 PM PDT until Mon Oct 6 at 5:00 AM PDT. Shoulder will be closed. Watch for traffic control personnel. Last updated Fri Oct 3 at 4:13 PM PDT. (DBC-82273)",
+    "+ivr_message": "Highway 17A, northbound. Bridge maintenance planned between 28 Ave Overpass and 34B Ave (Delta). Starting Sunday, October 5 at 11:00 PM until Monday, October 6 at 5:00 AM. Shoulder will be closed. Watch for traffic control personnel. Last updated Friday, October 3 at 4:13 PM.",
+    "+linear_reference_km": 28.16,
+    "schedule": {
+      "intervals": [
+        "2025-10-06T06:00/2025-10-06T12:00"
+      ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+      "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+      "type": "LineString",
+      "coordinates": [
+        [
+          -123.057192,
+          49.059403
+        ],
+        [
+          -123.057189,
+          49.059462
+        ],
+        [
+          -123.057188,
+          49.059497
+        ]
+      ]
+    },
+    "roads": [
+      {
+        "name": "Highway 17A",
+        "from": "28 Ave Overpass",
+        "to": "34B Ave",
+        "direction": "N"
+      }
+    ],
+    "areas": [
+      {
+        "url": "http://www.geonames.org/8630136",
+        "name": "Lower Mainland District",
+        "id": "drivebc.ca/1"
+      }
+    ]
   },
   {
-    "id": "BC--220263",
-    "organization": "BCMoTI",
-    "roadwayName": "HWY 17",
-    "directionOfTravel": "Southbound",
-    "description": "Recurring-Moving Maintenance Closure on HWY 17 Southbound between HWY 99 and HWY 91, Delta. 1 Alternating Lane(s).",
-    "reported": 1736125200,
-    "lastUpdated": 1735573885,
-    "startDate": 1736125200,
-    "plannedEndDate": 1736596800,
-    "lanesAffected": "1 Alternating Lane(s)",
-    "latitude": 49.1967,
-    "longitude": -122.9065,
-    "latitudeSecondary": 0.0,
-    "longitudeSecondary": 0.0,
-    "eventType": "roadwork",
-    "isFullClosure": false,
-    "comment": "",
-    "recurrence": "",
-    "recurrenceSchedules": "",
-    "linkId": "37164106"
+    "jurisdiction_url": "https://api.open511.gov.bc.ca/jurisdiction",
+    "url": "https://api.open511.gov.bc.ca/events/drivebc.ca/DBC-82281",
+    "id": "drivebc.ca/DBC-82281",
+    "headline": "CONSTRUCTION",
+    "status": "ACTIVE",
+    "created": "2025-10-03T20:44:28-07:00",
+    "updated": "2025-10-03T20:44:28-07:00",
+    "description": "Highway 1 (TransCanada Highway). Construction work planned between Friesen Rd and Venables Valley Rd (10 km east of Spences Bridge). Starting Mon Oct 20 at 9:30 AM PDT until Fri Oct 24 at 5:30 PM PDT. Lane Closure. Expect minor delays. Last updated Fri Oct 3 at 8:44 PM PDT. (DBC-82281)",
+    "+ivr_message": "Highway 1 (TransCanada Highway). Construction work planned between Friesen Rd and Venables Valley Rd (10 km east of Spences Bridge). Starting Monday, October 20 at 9:30 AM until Friday, October 24 at 5:30 PM. Lane Closure. Expect minor delays. Last updated Friday, October 3 at 8:44 PM.",
+    "+linear_reference_km": 503.06,
+    "schedule": {
+      "intervals": [
+        "2025-10-20T16:30/2025-10-25T00:30"
+      ]
+    },
+    "event_type": "CONSTRUCTION",
+    "event_subtypes": [
+      "ROAD_MAINTENANCE"
+    ],
+    "severity": "MINOR",
+    "geography": {
+      "type": "Point",
+      "coordinates": [
+        -121.286349,
+        50.507899
+      ]
+    },
+    "roads": [
+      {
+        "name": "Highway 1",
+        "from": "Friesen Rd",
+        "direction": "NONE"
+      }
+    ],
+    "areas": [
+      {
+        "url": "http://www.geonames.org/8630134",
+        "name": "Cariboo District",
+        "id": "drivebc.ca/7"
+      }
+    ]
   }
 ]

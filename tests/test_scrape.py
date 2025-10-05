@@ -212,13 +212,26 @@ def test_float_to_decimal(sample_event):
 def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sample_events):
     # Update sample events to match expected structure
     for event in sample_events:
-        event['status'] = 'ACTIVE'
-        event['geography'] = {'type': 'Point', 'coordinates': [-123.1207, 49.2827], 'areas': [{'name': 'Lower Mainland District'}]}
-        event['event_type'] = event.get('eventType', 'roadwork')
-        event['severity'] = 'MODERATE'
-        event['description'] = event.get('description', 'Test description')
-        event['created'] = '2023-01-01T12:00:00Z'
-        event['updated'] = '2023-01-01T12:00:00Z'
+        # Real BC 511 data already has these fields, just ensure they exist
+        if 'status' not in event:
+            event['status'] = 'ACTIVE'
+        if 'geography' not in event:
+            event['geography'] = {'type': 'Point', 'coordinates': [-123.1207, 49.2827]}
+        if 'areas' not in event:
+            event['areas'] = [{'name': 'Lower Mainland District'}]
+        if 'event_type' not in event:
+            event['event_type'] = event.get('eventType', 'CONSTRUCTION')
+        if 'severity' not in event:
+            event['severity'] = event.get('severity', 'MODERATE')
+        if 'description' not in event:
+            event['description'] = event.get('description', 'Test description')
+        if 'created' not in event:
+            event['created'] = '2023-01-01T12:00:00Z'
+        if 'updated' not in event:
+            event['updated'] = '2023-01-01T12:00:00Z'
+        
+        # Add a filter keyword to trigger post_to_discord
+        event['description'] = event.get('description', '') + ' - road closed for maintenance'
     
     # Mock fetch_all_events to return proper structure
     mock_fetch.return_value = {'events': sample_events}
