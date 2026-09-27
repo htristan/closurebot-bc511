@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, Mock, mock_open
 import json
 from datetime import datetime, timedelta
+from pytz import timezone
 from decimal import Decimal
 from freezegun import freeze_time
 from moto import mock_aws
@@ -13,9 +14,9 @@ os.environ['DISCORD_WEBHOOK'] = 'https://mock-discord-webhook.com/test'
 
 from scrape import (
     check_which_polygon, getThreadID, unix_to_readable_with_timezone,
-    post_to_discord,
+    post_to_discord, is_road_closed, is_ramp, schedule_has_started, alert_path,
     close_recent_events, cleanup_old_events, float_to_decimal,
-    check_and_post_events
+    check_and_post_events, fetch_all_events
 )
 
 # Load fixture data
@@ -129,6 +130,7 @@ def test_post_to_discord_completed(mock_webhook, sample_event, mock_config):
     sample_event['description'] = sample_event.get('description', 'Test description')
     sample_event['created'] = '2023-01-01T12:00:00Z'
     sample_event['updated'] = '2023-01-01T12:00:00Z'
+    sample_event['lastTouched'] = Decimal('1759000000')
     
     with patch('scrape.config', mock_config):
         post_to_discord(sample_event, 'archived', 'LowerMainland')
@@ -209,7 +211,7 @@ def test_float_to_decimal(sample_event):
 # Main Function Test
 @patch('scrape.fetch_all_events')
 @patch('scrape.post_to_discord')
-def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sample_events):
+def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sample_events, mock_config):
     # Update sample events to match expected structure
     for event in sample_events:
         # Real BC 511 data already has these fields, just ensure they exist
@@ -229,10 +231,11 @@ def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sampl
             event['created'] = '2023-01-01T12:00:00Z'
         if 'updated' not in event:
             event['updated'] = '2023-01-01T12:00:00Z'
-        
-        # Add a filter keyword to trigger post_to_discord
-        event['description'] = event.get('description', '') + ' - road closed for maintenance'
-    
+        if 'roads' not in event:
+            event['roads'] = [{'name': 'Highway 1', 'direction': 'BOTH'}]
+        for road in event['roads']:
+            road['state'] = 'CLOSED'
+
     # Mock fetch_all_events to return proper structure
     mock_fetch.return_value = {'events': sample_events}
     
@@ -245,7 +248,222 @@ def test_check_and_post_events(mock_post, mock_fetch, mock_dynamodb_table, sampl
         check_and_post_events()
         
         # Verify Discord post was called for new events
-        assert mock_post.call_count > 0
+        assert mock_post.call_count == len(sample_events)
+
+def test_is_road_closed():
+    assert is_road_closed({"roads": [{"state": "CLOSED"}]})
+    assert is_road_closed({"roads": [{"state": "closed"}]})
+    assert is_road_closed({
+        "roads": [
+            {"state": "ALL_LANES_OPEN"},
+            {"state": "CLOSED"},
+        ]
+    })
+    assert not is_road_closed({"roads": [{"state": "ALL_LANES_OPEN"}]})
+    assert not is_road_closed({"roads": [{"name": "Highway 1"}]})
+    assert not is_road_closed({})
+    assert not is_road_closed({
+        "description": "Vehicle incident. Closed. Expect major delays.",
+        "roads": [{"state": "ALL_LANES_OPEN"}],
+    })
+
+def _event(**overrides):
+    event = {
+        "id": "drivebc.ca/RIDE-1",
+        "status": "ACTIVE",
+        "event_type": "INCIDENT",
+        "severity": "MINOR",
+        "description": "Vehicle incident. Closed. Expect major delays.",
+        "created": "2026-09-24T18:00:00-07:00",
+        "updated": "2026-09-24T18:00:00-07:00",
+        "geography": {"type": "Point", "coordinates": [-121.44, 49.38]},
+        "areas": [{"name": "Lower Mainland District"}],
+        "roads": [{"name": "Highway 3", "direction": "E", "state": "CLOSED"}],
+    }
+    event.update(overrides)
+    return event
+
+def test_alert_path_rules():
+    pacific = timezone("US/Pacific")
+    now = pacific.localize(datetime(2026, 9, 27, 12, 0))
+    assert is_ramp({"name": "Sumas Way Onramp", "from": "Highway 11"})
+    assert is_ramp({"name": "Highway 1A", "from": "Trans-Canada Highway Onramp"})
+    assert not is_ramp({"name": "Highway 3", "from": "5km East of Hope"})
+
+    # Path 1: any severity, closed non-ramp, schedule already started or absent.
+    assert alert_path(_event()) == "closed_road"
+    assert alert_path(_event(severity="MAJOR", description="Road closed.")) == "closed_road"
+    assert alert_path(_event(
+        roads=[
+            {"name": "Highway 1", "direction": "E", "state": "CLOSED"},
+            {"name": "Sumas Way Onramp", "direction": "W", "state": "CLOSED"},
+        ]
+    )) == "closed_road"
+
+    # A ramp-only closure stays quiet, even when the text says the ramp is closed.
+    assert alert_path(_event(
+        severity="MAJOR",
+        description="Entrance ramp closed. Detour via McCallum Rd.",
+        roads=[{"name": "Sumas Way Onramp", "direction": "W", "state": "CLOSED"}],
+    )) is None
+
+    # Future closures wait until the schedule start.
+    assert not schedule_has_started(_event(schedule={"intervals": ["2099-01-01T00:00/"]}), now)
+    assert alert_path(_event(schedule={"intervals": ["2099-01-01T00:00/"]}), now) is None
+    assert alert_path(_event(schedule={"intervals": ["2020-01-01T00:00/"]}), now) == "closed_road"
+    assert schedule_has_started(_event(), now)
+    # 14:45 with no offset is 7:45 AM Pacific, not 2:45 PM.
+    garibaldi = _event(schedule={"intervals": ["2026-09-27T14:45/2026-09-27T16:00"]})
+    before_open = pacific.localize(datetime(2026, 9, 27, 7, 0))
+    during = pacific.localize(datetime(2026, 9, 27, 8, 30))
+    assert not schedule_has_started(garibaldi, before_open)
+    assert schedule_has_started(garibaldi, during)
+    assert schedule_has_started(_event(schedule={"recurring_schedules": [{"start_date": "2020-01-01"}]}), now)
+    assert not schedule_has_started(_event(schedule={"recurring_schedules": [{"start_date": "2099-01-01"}]}), now)
+
+    # Path 2: MAJOR/MODERATE prose, and only when no road is marked CLOSED.
+    assert alert_path(_event(
+        severity="MAJOR",
+        description="Bridge closed at Johnston Bridge Loop. Industrial traffic must detour.",
+        roads=[{"name": "Other Roads", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+    )) == "keyword"
+    assert alert_path(_event(
+        severity="MODERATE",
+        description="Road Closed from 9AM-3PM PT on weekdays.",
+        roads=[{"name": "Highway 1", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+    )) == "keyword"
+    assert alert_path(_event(
+        severity="MINOR",
+        description="Road closed. Detour in effect.",
+        roads=[{"name": "Allenby Road", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+    )) is None
+    assert alert_path(_event(
+        severity="MAJOR",
+        description="Road maintenance at Second Avalanche Gate. Detour in effect. Both lanes open.",
+        roads=[{"name": "Highway 3", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+    )) is None
+
+@patch('scrape.fetch_all_events')
+@patch('scrape.post_to_discord')
+def test_new_events_use_both_alert_paths(mock_post, mock_fetch, mock_dynamodb_table):
+    events = [
+        _event(id="drivebc.ca/RIDE-closed"),
+        _event(
+            id="drivebc.ca/RIDE-keyword",
+            severity="MAJOR",
+            description="Bridge closed at Johnston Bridge Loop.",
+            roads=[{"name": "Other Roads", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+        ),
+        _event(
+            id="drivebc.ca/RIDE-open",
+            severity="MAJOR",
+            description="Detour in effect at Second Avalanche Gate. Both lanes open.",
+            roads=[{"name": "Highway 3", "direction": "BOTH", "state": "ALL_LANES_OPEN"}],
+        ),
+        _event(
+            id="drivebc.ca/RIDE-ramp",
+            severity="MAJOR",
+            description="Entrance ramp closed.",
+            roads=[{"name": "Sumas Way Onramp", "direction": "W", "state": "CLOSED"}],
+        ),
+        _event(
+            id="drivebc.ca/RIDE-future",
+            schedule={"intervals": ["2099-01-01T00:00/"]},
+        ),
+    ]
+    mock_fetch.return_value = {"events": events}
+    mock_dynamodb_table.query.return_value = {"Items": []}
+    mock_dynamodb_table.scan.return_value = {"Items": []}
+
+    with patch('scrape.table', mock_dynamodb_table):
+        check_and_post_events()
+
+    posted_ids = [call.args[0]["id"] for call in mock_post.call_args_list]
+    assert posted_ids == ["drivebc.ca/RIDE-closed", "drivebc.ca/RIDE-keyword"]
+    assert all(call.args[1] == "closure" for call in mock_post.call_args_list)
+
+@mock_aws
+@patch('scrape.post_to_discord')
+def test_reopened_road_is_archived(mock_post):
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table = dynamodb.create_table(
+        TableName='test-db',
+        KeySchema=[{'AttributeName': 'EventID', 'KeyType': 'HASH'}],
+        AttributeDefinitions=[{'AttributeName': 'EventID', 'AttributeType': 'S'}],
+        BillingMode='PAY_PER_REQUEST'
+    )
+    table.put_item(Item={
+        "EventID": "drivebc.ca/RIDE-closed",
+        "isActive": 1,
+        "DetectedPolygon": "LowerMainland",
+        "geography": {"type": "Point", "coordinates": [Decimal("-121.44"), Decimal("49.38")]},
+        "id": "drivebc.ca/RIDE-closed",
+        "description": "Vehicle incident. Closed.",
+        "event_type": "INCIDENT",
+        "severity": "MAJOR",
+        "created": "2026-09-24T18:00:00-07:00",
+        "updated": "2026-09-24T18:00:00-07:00",
+    })
+
+    reopened = {
+        "id": "drivebc.ca/RIDE-closed",
+        "status": "ACTIVE",
+        "roads": [{"name": "Highway 3", "direction": "E", "state": "ALL_LANES_OPEN"}],
+    }
+
+    with patch('scrape.table', table):
+        close_recent_events({"events": [reopened]})
+
+    mock_post.assert_called_once()
+    assert mock_post.call_args.args[1] == "archived"
+    stored = table.get_item(Key={"EventID": "drivebc.ca/RIDE-closed"})["Item"]
+    assert stored["isActive"] == 0
+
+@patch('scrape.post_to_discord')
+def test_close_recent_events_scans_every_page(mock_post):
+    page_one_item = {
+        "EventID": "drivebc.ca/RIDE-page1",
+        "isActive": 1,
+        "geography": {"type": "Point", "coordinates": [Decimal("-123.1"), Decimal("49.2")]},
+    }
+    page_two_item = {
+        "EventID": "drivebc.ca/RIDE-page2",
+        "isActive": 1,
+        "geography": {"type": "Point", "coordinates": [Decimal("-123.2"), Decimal("49.3")]},
+    }
+    mock_table = Mock()
+    mock_table.scan.side_effect = [
+        {"Items": [page_one_item], "LastEvaluatedKey": {"EventID": "drivebc.ca/RIDE-page1"}},
+        {"Items": [page_two_item]},
+    ]
+
+    with patch('scrape.table', mock_table):
+        close_recent_events({"events": []})
+
+    assert mock_table.scan.call_count == 2
+    assert mock_table.scan.call_args_list[1].kwargs["ExclusiveStartKey"] == {"EventID": "drivebc.ca/RIDE-page1"}
+    assert [call.args[0]["EventID"] for call in mock_post.call_args_list] == [
+        "drivebc.ca/RIDE-page1",
+        "drivebc.ca/RIDE-page2",
+    ]
+
+@patch('scrape.requests.get')
+def test_fetch_all_events_ignores_severity(mock_get):
+    first = Mock()
+    first.ok = True
+    first.json.return_value = {"events": [{"id": f"drivebc.ca/RIDE-{i}"} for i in range(300)]}
+    second = Mock()
+    second.ok = True
+    second.json.return_value = {"events": [{"id": "drivebc.ca/RIDE-last"}]}
+    mock_get.side_effect = [first, second]
+
+    result = fetch_all_events()
+
+    assert len(result["events"]) == 301
+    assert mock_get.call_count == 2
+    for call in mock_get.call_args_list:
+        assert call.kwargs["params"]["status"] == "ACTIVE"
+        assert "severity" not in call.kwargs["params"]
 
 # Error Handling Tests
 def test_check_which_polygon_invalid_input():
