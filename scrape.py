@@ -40,8 +40,6 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_DB_SECRET_ACCESS_KEY', None)
 discordUsername = "DriveBC"
 discordAvatarURL = "https://pbs.twimg.com/profile_images/961736998745600000/Zrqm1EiB_400x400.jpg"
 
-# Fetch filter keywords from the config file
-FILTER_KEYWORDS = config.get('filter_keywords', [])
 # Fallback mechanism for credentials
 try:
     # Use environment variables if they exist
@@ -156,23 +154,111 @@ def parse_time_with_fallback(iso_time_str, fallback_tz):
 
     return dt
 
-def contains_keywords(description, keywords=FILTER_KEYWORDS):
-    """
-    Check if the description contains any of the specified keywords.
+# Path 2 only. These are closure phrases. "detour", "avalanche", "both lanes",
+# and "hov lane blocked" are intentionally absent: they match open roads.
+DEFAULT_CLOSURE_KEYWORDS = [
+    "road closed",
+    "road closure",
+    "bridge closed",
+    "route closed",
+    "all lanes closed",
+    "full closure",
+]
+_RAMP_RE = re.compile(r"\b(?:on-?ramp|off-?ramp|ramp)\b", re.IGNORECASE)
 
-    Args:
-        description (str): The text to search for keywords.
-        keywords (list, optional): A list of keywords to search for. Defaults to FILTER_KEYWORDS.
+def is_road_closed(event):
+    """True when any road on the event has Open511 state CLOSED."""
+    return any(_road_state(road) == "CLOSED" for road in event.get("roads") or [])
 
-    Returns:
-        tuple: A tuple containing (bool, str) where the bool indicates if a keyword was found,
-              and the str contains the matched keyword (or None if no match)
+def _road_state(road):
+    state = road.get("state")
+    if isinstance(state, str):
+        return state.upper()
+    return ""
+
+def is_ramp(road):
+    """A ramp closure is not a full road closure. Highway closures still alert."""
+    text = " ".join(str(road.get(field) or "") for field in ("name", "from", "to"))
+    return _RAMP_RE.search(text) is not None
+
+def _closure_keywords():
+    return config.get("closure_keywords", DEFAULT_CLOSURE_KEYWORDS)
+
+def _fallback_tz():
+    return timezone(config['timezone'])
+
+def _parse_schedule_start(value, fallback_tz):
+    value = value.strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        # A recurring start_date is a local calendar day.
+        return fallback_tz.localize(datetime.fromisoformat(value))
+    if value.endswith("Z"):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if "+" in value or "-" in value[10:]:
+        return datetime.fromisoformat(value)
+    # Interval times omit the offset. 14:45 is 7:45 AM PDT, so they are UTC.
+    return timezone("UTC").localize(datetime.fromisoformat(value))
+
+def schedule_has_started(event, now=None):
     """
-    description = description.lower()
-    for keyword in keywords:
-        if keyword.lower() in description:
-            return True, keyword
-    return False, None
+    True when the event has no schedule, or any recorded start is already past.
+    This is the event start, not the daily closure window inside a long event.
+    """
+    fallback_tz = _fallback_tz()
+    if now is None:
+        now = datetime.now(timezone("UTC")).astimezone(fallback_tz)
+    elif now.tzinfo is None:
+        now = fallback_tz.localize(now)
+    else:
+        now = now.astimezone(fallback_tz)
+
+    starts = []
+    schedule = event.get("schedule") or {}
+    for interval in schedule.get("intervals") or []:
+        if not isinstance(interval, str) or "/" not in interval:
+            continue
+        start_str = interval.split("/", 1)[0].strip()
+        if not start_str:
+            continue
+        try:
+            starts.append(_parse_schedule_start(start_str, fallback_tz))
+        except ValueError:
+            continue
+    for recurring in schedule.get("recurring_schedules") or []:
+        start_date = recurring.get("start_date")
+        if not start_date:
+            continue
+        try:
+            starts.append(_parse_schedule_start(start_date, fallback_tz))
+        except ValueError:
+            continue
+
+    if not starts:
+        return True
+    return any(start <= now for start in starts)
+
+def alert_path(event, now=None):
+    """
+    closed_road: any severity, a non-ramp road is CLOSED, and the schedule has started.
+    keyword: MAJOR/MODERATE only, the description matches a closure phrase, and no road is CLOSED.
+    """
+    if schedule_has_started(event, now) and any(
+        _road_state(road) == "CLOSED" and not is_ramp(road)
+        for road in event.get("roads") or []
+    ):
+        return "closed_road"
+    if is_road_closed(event):
+        return None
+    severity = (event.get("severity") or "").upper()
+    if severity not in ("MAJOR", "MODERATE"):
+        return None
+    description = (event.get("description") or "").lower()
+    if any(keyword.lower() in description for keyword in _closure_keywords()):
+        return "keyword"
+    return None
+
+def should_alert(event, now=None):
+    return alert_path(event, now) is not None
 
 def post_to_discord(event, post_type, threadName, point=None):
     """
@@ -268,10 +354,6 @@ def post_to_discord(event, post_type, threadName, point=None):
         else:
             embed.add_embed_field(name="Map Links", value=f"[DriveBC]({url511}) | [WME]({url_wme}) | [Livemap]({url_livemap})", inline=False)
 
-    # Add matched keyword if it exists
-    if 'matched_keyword' in event:
-        embed.add_embed_field(name="Matched Keyword", value=event['matched_keyword'], inline=False)
-
     # Set Footer
     embed.set_footer(text=config['license_notice'])
 
@@ -299,39 +381,35 @@ def post_to_discord(event, post_type, threadName, point=None):
     webhook.add_embed(embed)
     webhook.execute()
 def fetch_all_events():
+    """
+    Fetch every active event. Severity is not a closure signal: DriveBC marks
+    many real closures as MINOR, and the CLOSED road state is what we keep.
+    """
     base_url = "https://api.open511.gov.bc.ca/events"
-    limit = 300  # Define the limit per API call
-    severities = ["MAJOR", "MODERATE"]  # List of severities to filter
-    all_events = []  # List to store all events
+    limit = 300
+    all_events = []
+    offset = 0
 
-    for severity in severities:
-        offset = 0  # Start at the beginning for each severity
-        while True:
-            # Make the API request with limit, offset, and severity filter
-            response = requests.get(f"{base_url}?severity={severity}&limit={limit}&offset={offset}")
-            
-            if not response.ok:
-                raise Exception(f"Error connecting to BC511 API for severity {severity}: {response.status_code} - {response.text}")
-            
-            # Parse the response JSON
-            data = response.json()
-            
-            # Extract the events
-            events = data.get('events', [])
-            if not events:
-                break  # Exit the loop if no more events are returned
+    while True:
+        response = requests.get(
+            base_url,
+            params={"status": "ACTIVE", "limit": limit, "offset": offset},
+        )
 
-            # Add the events to the list
-            all_events.extend(events)
+        if not response.ok:
+            raise Exception(f"Error connecting to BC511 API: {response.status_code} - {response.text}")
 
-            # Increment the offset by the limit for the next batch
-            offset += limit
+        data = response.json()
+        events = data.get('events', [])
+        if not events:
+            break
 
-            # Break if fewer events were returned than the limit (last page)
-            if len(events) < limit:
-                break
+        all_events.extend(events)
+        offset += limit
 
-    # Return a dictionary structured like the original API response
+        if len(events) < limit:
+            break
+
     return {"events": all_events}
 
 def check_and_post_events():
@@ -375,16 +453,12 @@ def check_and_post_events():
                 FilterExpression=Attr('isActive').eq(1)
             )
 
-            # Get event description
-            description = event.get("description", "")
-
             #If the event is not in the DynamoDB table
             update_utc_timestamp()
             if not dbResponse['Items']:
-                # If the event is new, apply the keyword filter
-                has_keywords, matched_keyword = contains_keywords(description)
-                if not has_keywords:
-                    continue  # Skip if keywords are not found
+                path = alert_path(event)
+                if path is None:
+                    continue
                 # Set the EventID key in the event data
                 event['EventID'] = event['id']
                 # Set the isActive attribute
@@ -392,15 +466,11 @@ def check_and_post_events():
                 # set LastTouched
                 event['lastTouched'] = utc_timestamp
                 event['DetectedPolygon'] = detectedPolygon
-                # Add the matched keyword to the event (temporary)
-                event['matched_keyword'] = matched_keyword
                 # Convert float values in the event to Decimal
                 event = float_to_decimal(event)
-                logging.info(f"Posting New EventID: {event['EventID']}")
+                logging.info(f"Posting New EventID: {event['EventID']} via {path}")
                 # If the event is within the specified area and has not been posted before, post it to Discord
                 post_to_discord(event,'closure',detectedPolygon,point)
-                # Remove the matched_keyword before storing in DynamoDB (optional)
-                event.pop('matched_keyword', None)
                 # Add the event ID to the DynamoDB table
                 table.put_item(Item=event)
             else:
@@ -477,10 +547,9 @@ def close_recent_events(data):
         if event_id not in active_event_ids:
             markCompleted = True
         else:
-            # item exists, but now we need to check to see if it's no longer a full closure
+            # Still listed, but no longer a closure we would alert on.
             event_data = next((e for e in data['events'] if e['id'] == event_id), None)
-            if event_data and event_data.get('status', '').upper() != 'ACTIVE':
-                #now it's no longer a full closure - markt it as closed.
+            if event_data is None or event_data.get('status', '').upper() != 'ACTIVE' or not should_alert(event_data):
                 markCompleted = True
 
         # process relevant completions
