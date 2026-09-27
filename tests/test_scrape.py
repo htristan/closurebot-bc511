@@ -419,6 +419,34 @@ def test_reopened_road_is_archived(mock_post):
     stored = table.get_item(Key={"EventID": "drivebc.ca/RIDE-closed"})["Item"]
     assert stored["isActive"] == 0
 
+@patch('scrape.post_to_discord')
+def test_close_recent_events_scans_every_page(mock_post):
+    page_one_item = {
+        "EventID": "drivebc.ca/RIDE-page1",
+        "isActive": 1,
+        "geography": {"type": "Point", "coordinates": [Decimal("-123.1"), Decimal("49.2")]},
+    }
+    page_two_item = {
+        "EventID": "drivebc.ca/RIDE-page2",
+        "isActive": 1,
+        "geography": {"type": "Point", "coordinates": [Decimal("-123.2"), Decimal("49.3")]},
+    }
+    mock_table = Mock()
+    mock_table.scan.side_effect = [
+        {"Items": [page_one_item], "LastEvaluatedKey": {"EventID": "drivebc.ca/RIDE-page1"}},
+        {"Items": [page_two_item]},
+    ]
+
+    with patch('scrape.table', mock_table):
+        close_recent_events({"events": []})
+
+    assert mock_table.scan.call_count == 2
+    assert mock_table.scan.call_args_list[1].kwargs["ExclusiveStartKey"] == {"EventID": "drivebc.ca/RIDE-page1"}
+    assert [call.args[0]["EventID"] for call in mock_post.call_args_list] == [
+        "drivebc.ca/RIDE-page1",
+        "drivebc.ca/RIDE-page2",
+    ]
+
 @patch('scrape.requests.get')
 def test_fetch_all_events_ignores_severity(mock_get):
     first = Mock()

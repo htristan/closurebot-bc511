@@ -531,44 +531,50 @@ def close_recent_events(data):
     # Create a set of active event IDs
     active_event_ids = {event['id'] for event in data['events']}
 
-    # Get the list of event IDs in the table
-    response = table.scan(
-        FilterExpression=Attr('isActive').eq(1)
-    )
+    # Scan is capped at 1 MB per call. Follow LastEvaluatedKey until every active row is seen.
+    scan_params = {
+        'FilterExpression': Attr('isActive').eq(1)
+    }
+    while True:
+        response = table.scan(**scan_params)
 
-    # Iterate over the items
-    for item in response['Items']:
-        markCompleted = False
-        event_id = item['EventID']
+        for item in response['Items']:
+            markCompleted = False
+            event_id = item['EventID']
 
-        # Extract a representative point
-        point = parse_geography(item['geography'])
+            # Extract a representative point
+            point = parse_geography(item['geography'])
 
-        # If an item's ID is not in the set of active event IDs, mark it as closed
-        if event_id not in active_event_ids:
-            markCompleted = True
-        else:
-            # Still listed, but no longer a closure we would alert on.
-            event_data = next((e for e in data['events'] if e['id'] == event_id), None)
-            if event_data is None or event_data.get('status', '').upper() != 'ACTIVE' or not should_alert(event_data):
+            # If an item's ID is not in the set of active event IDs, mark it as closed
+            if event_id not in active_event_ids:
                 markCompleted = True
-
-        # process relevant completions
-        if markCompleted:
-            # Convert float values in the item to Decimal
-            item = float_to_decimal(item)
-
-            # Remove the isActive attribute from the item
-            table.update_item(
-                Key={'EventID': event_id},
-                UpdateExpression="SET isActive = :val",
-                ExpressionAttributeValues={':val': 0}
-            )
-            # Notify about closure on Discord
-            if 'DetectedPolygon' in item and item['DetectedPolygon'] is not None:
-                post_to_discord(item,'archived',item['DetectedPolygon'],point)
             else:
-                post_to_discord(item,'archived',None,point)
+                # Still listed, but no longer a closure we would alert on.
+                event_data = next((e for e in data['events'] if e['id'] == event_id), None)
+                if event_data is None or event_data.get('status', '').upper() != 'ACTIVE' or not should_alert(event_data):
+                    markCompleted = True
+
+            # process relevant completions
+            if markCompleted:
+                # Convert float values in the item to Decimal
+                item = float_to_decimal(item)
+
+                # Remove the isActive attribute from the item
+                table.update_item(
+                    Key={'EventID': event_id},
+                    UpdateExpression="SET isActive = :val",
+                    ExpressionAttributeValues={':val': 0}
+                )
+                # Notify about closure on Discord
+                if 'DetectedPolygon' in item and item['DetectedPolygon'] is not None:
+                    post_to_discord(item,'archived',item['DetectedPolygon'],point)
+                else:
+                    post_to_discord(item,'archived',None,point)
+
+        if 'LastEvaluatedKey' in response:
+            scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        else:
+            break
 
 def cleanup_old_events():
     # Get the current time and subtract 5 days to get the cut-off time
