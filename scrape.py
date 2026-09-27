@@ -366,7 +366,8 @@ def post_to_discord(event, post_type, threadName, point=None):
     elif post_type == "archived":
         last_touched = event.get("lastTouched", None)
         if last_touched:
-            embed.set_timestamp(datetime.utcfromtimestamp(last_touched))
+            # DynamoDB returns the stored unix time as a Decimal.
+            embed.set_timestamp(datetime.utcfromtimestamp(int(last_touched)))
         else:
             # Fallback to the current UTC time if lastTouched is missing
             embed.set_timestamp(datetime.utcnow())

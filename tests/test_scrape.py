@@ -130,6 +130,7 @@ def test_post_to_discord_completed(mock_webhook, sample_event, mock_config):
     sample_event['description'] = sample_event.get('description', 'Test description')
     sample_event['created'] = '2023-01-01T12:00:00Z'
     sample_event['updated'] = '2023-01-01T12:00:00Z'
+    sample_event['lastTouched'] = Decimal('1759000000')
     
     with patch('scrape.config', mock_config):
         post_to_discord(sample_event, 'archived', 'LowerMainland')
