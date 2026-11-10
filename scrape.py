@@ -413,6 +413,40 @@ def fetch_all_events():
 
     return {"events": all_events}
 
+def _scan_pages(scan_params):
+    """Yield every page of a scan. DynamoDB stops a page at 1 MB."""
+    while True:
+        response = table.scan(**scan_params)
+        yield response
+        if 'LastEvaluatedKey' in response:
+            scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        else:
+            break
+
+def _coerce_unix(value):
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(parse_time_with_fallback(value, timezone('UTC')).timestamp())
+        except ValueError:
+            return None
+    return None
+
+def _item_updated_unix(item):
+    """When this row was last updated by the feed.
+
+    Older rows stored a numeric LastUpdated. BC rows store the Open511 `updated`
+    ISO string. Prefer LastUpdated when both are present.
+    """
+    for key in ('LastUpdated', 'updated'):
+        unix = _coerce_unix(item.get(key))
+        if unix is not None:
+            return unix
+    return None
+
 def check_and_post_events():
     #check if we need to clean old events
     last_execution_day = get_last_execution_day()
@@ -427,181 +461,130 @@ def check_and_post_events():
     # Fetch Events from BC API
     data = fetch_all_events()
 
-    #use the response to close out anything recent
-    close_recent_events(data)
+    # One scan of active rows. The feed has hundreds of non-closures; querying
+    # Dynamo once per event is what pushed this Lambda toward its timeout.
+    still_active = close_recent_events(data)
 
-    # Iterate over the events
     for event in data['events']:
-        if event['status'] == 'ACTIVE':
-            # Parse geography
-            geography = event.get('geography', {})
-            if not geography:
-                continue  # Skip if no geographical info is available
+        if event.get('status') != 'ACTIVE':
+            continue
+        stored_event = still_active.get(event['id'])
+        # Not tracked, and not a closure we would alert on. Skip the rest.
+        path = None if stored_event is not None else alert_path(event)
+        if stored_event is None and path is None:
+            continue
 
-            # Extract a representative point
-            point = parse_geography(geography)
+        geography = event.get('geography') or {}
+        if not geography:
+            continue
 
-            # Determine the area name from 'areas'
-            if 'areas' in event and isinstance(event['areas'], list) and len(event['areas']) > 0:
-                area_name = event['areas'][0].get('name', 'Unknown')  # Safely get the 'name' field
+        point = parse_geography(geography)
+
+        if 'areas' in event and isinstance(event['areas'], list) and len(event['areas']) > 0:
+            area_name = event['areas'][0].get('name', 'Unknown')
+        else:
+            area_name = None
+        detectedPolygon = check_which_polygon(area_name)
+
+        update_utc_timestamp()
+        if stored_event is None:
+            event['EventID'] = event['id']
+            event['isActive'] = 1
+            event['lastTouched'] = utc_timestamp
+            event['DetectedPolygon'] = detectedPolygon
+            event = float_to_decimal(event)
+            logging.info(f"Posting New EventID: {event['EventID']} via {path}")
+            post_to_discord(event,'closure',detectedPolygon,point)
+            table.put_item(Item=event)
+        else:
+            event = float_to_decimal(event)
+            lastUpdated = stored_event.get('updated')
+            if lastUpdated != None:
+                if lastUpdated != event['updated']:
+                    event['EventID'] = event['id']
+                    event['isActive'] = 1
+                    event['lastTouched'] = utc_timestamp
+                    event['DetectedPolygon'] = detectedPolygon
+                    logging.info(f"Posting Updated EventID: {event['EventID']}")
+                    post_to_discord(event,'update',detectedPolygon,point)
+                    table.put_item(Item=event)
+            lastTouched = stored_event.get('lastTouched')
+            now = datetime.fromtimestamp(utc_timestamp)
+            if lastTouched is None:
+                logging.warning(f"EventID: {event['id']} - Missing lastTouched. Setting it now.")
+                lastTouched_datetime = now
             else:
-                area_name = None
-            detectedPolygon = check_which_polygon(area_name)
-
-            # Try to get the event with the specified ID and isActive=1 from the DynamoDB table
-            dbResponse = table.query(
-                KeyConditionExpression=Key('EventID').eq(event['id']),
-                FilterExpression=Attr('isActive').eq(1)
+                lastTouched_datetime = datetime.fromtimestamp(int(lastTouched))
+            time_diff_min = (now - lastTouched_datetime).total_seconds() / 60
+            variability = random.uniform(-2, 2)
+            time_diff_min += variability
+            logging.info(
+                f"EventID: {event['id']}, TimeDiff: {time_diff_min:.2f} minutes (Variability: {variability:.2f}), LastTouched: {lastTouched_datetime}, Now: {now}"
             )
-
-            #If the event is not in the DynamoDB table
-            update_utc_timestamp()
-            if not dbResponse['Items']:
-                path = alert_path(event)
-                if path is None:
-                    continue
-                # Set the EventID key in the event data
-                event['EventID'] = event['id']
-                # Set the isActive attribute
-                event['isActive'] = 1
-                # set LastTouched
-                event['lastTouched'] = utc_timestamp
-                event['DetectedPolygon'] = detectedPolygon
-                # Convert float values in the event to Decimal
-                event = float_to_decimal(event)
-                logging.info(f"Posting New EventID: {event['EventID']} via {path}")
-                # If the event is within the specified area and has not been posted before, post it to Discord
-                post_to_discord(event,'closure',detectedPolygon,point)
-                # Add the event ID to the DynamoDB table
-                table.put_item(Item=event)
-            else:
-                # We have seen this event before
-                # First, let's see if it has a lastupdated time
-                event = float_to_decimal(event)
-                stored_event = dbResponse['Items'][0]
-                lastUpdated = stored_event.get('updated')
-                if lastUpdated != None:
-                    # Now, see if the version we stored is different
-                    if lastUpdated != event['updated']:
-                        # Store the most recent updated time:
-                        event['EventID'] = event['id']
-                        event['isActive'] = 1
-                        event['lastTouched'] = utc_timestamp
-                        event['DetectedPolygon'] = detectedPolygon
-                        # It's different, so we should fire an update notification
-                        logging.info(f"Posting Updated EventID: {event['EventID']}")
-                        post_to_discord(event,'update',detectedPolygon,point)
-                        table.put_item(Item=event)
-                # Get the lastTouched time
-                lastTouched = dbResponse['Items'][0].get('lastTouched')
-                if lastTouched is None:
-                    logging.warning(f"EventID: {event['ID']} - Missing lastTouched. Setting it now.")
-                    lastTouched_datetime = now
-                else:
-                    lastTouched_datetime = datetime.fromtimestamp(int(lastTouched))
-                # store the current time now
-                now = datetime.fromtimestamp(utc_timestamp)
-                # Compute the difference in minutes between now and lastUpdated
-                time_diff_min = (now - lastTouched_datetime).total_seconds() / 60
-                # Compute the variability
-                variability = random.uniform(-2, 2)  # random float between -2 and 2
-                # Add variability to the time difference
-                time_diff_min += variability
-                # Log calculated time difference and variability
-                logging.info(
-                    f"EventID: {event['id']}, TimeDiff: {time_diff_min:.2f} minutes (Variability: {variability:.2f}), LastTouched: {lastTouched_datetime}, Now: {now}"
+            if abs(time_diff_min) > 5:
+                table.update_item(
+                    Key={'EventID': event['id']},
+                    UpdateExpression="SET lastTouched = :val",
+                    ExpressionAttributeValues={':val': utc_timestamp}
                 )
-                # If time_diff_min > 5, then more than 5 minutes have passed (considering variability)
-                if abs(time_diff_min) > 5:
-                    # let's store that we just saw it to keep track of the last touch time
-                    table.update_item(
-                        Key={'EventID': event['id']},
-                        UpdateExpression="SET lastTouched = :val",
-                        ExpressionAttributeValues={':val': utc_timestamp}
-                    )
-                    logging.info(f"EventID: {event['id']} - lastTouched updated successfully.")
-                # else:
-                #     logging.info(f"EventID: {event['ID']} - No update needed. TimeDiff: {time_diff_min:.2f}")
+                logging.info(f"EventID: {event['id']} - lastTouched updated successfully.")
 
 def close_recent_events(data):
     # Ensure the expected structure is present
     if 'events' not in data or not isinstance(data['events'], list):
         raise KeyError("The API response does not contain a valid 'events' list.")
 
-    # Create a set of active event IDs
-    active_event_ids = {event['id'] for event in data['events']}
+    events_by_id = {event['id']: event for event in data['events']}
+    still_active = {}
 
     # Scan is capped at 1 MB per call. Follow LastEvaluatedKey until every active row is seen.
+    # The filter does not reduce the read: inactive history is still scanned.
     scan_params = {
         'FilterExpression': Attr('isActive').eq(1)
     }
-    while True:
-        response = table.scan(**scan_params)
-
+    for response in _scan_pages(scan_params):
         for item in response['Items']:
-            markCompleted = False
             event_id = item['EventID']
-
-            # Extract a representative point
             point = parse_geography(item['geography'])
+            event_data = events_by_id.get(event_id)
+            mark_completed = (
+                event_data is None
+                or event_data.get('status', '').upper() != 'ACTIVE'
+                or not should_alert(event_data)
+            )
 
-            # If an item's ID is not in the set of active event IDs, mark it as closed
-            if event_id not in active_event_ids:
-                markCompleted = True
-            else:
-                # Still listed, but no longer a closure we would alert on.
-                event_data = next((e for e in data['events'] if e['id'] == event_id), None)
-                if event_data is None or event_data.get('status', '').upper() != 'ACTIVE' or not should_alert(event_data):
-                    markCompleted = True
-
-            # process relevant completions
-            if markCompleted:
-                # Convert float values in the item to Decimal
+            if mark_completed:
                 item = float_to_decimal(item)
-
-                # Remove the isActive attribute from the item
                 table.update_item(
                     Key={'EventID': event_id},
                     UpdateExpression="SET isActive = :val",
                     ExpressionAttributeValues={':val': 0}
                 )
-                # Notify about closure on Discord
                 if 'DetectedPolygon' in item and item['DetectedPolygon'] is not None:
                     post_to_discord(item,'archived',item['DetectedPolygon'],point)
                 else:
                     post_to_discord(item,'archived',None,point)
+            else:
+                still_active[event_id] = item
 
-        if 'LastEvaluatedKey' in response:
-            scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
-        else:
-            break
+    return still_active
 
 def cleanup_old_events():
-    # Get the current time and subtract 5 days to get the cut-off time
-    now = datetime.now()
-    cutoff = now - timedelta(days=5)
-    # Convert the cutoff time to Unix timestamp
-    cutoff_unix = Decimal(str(cutoff.timestamp()))
-    # Initialize the scan parameters
+    # Inactive rows older than 5 days. BC stores `updated` as an ISO string, so the
+    # cutoff is applied in Python. LastUpdated is still honored for older numeric rows.
+    cutoff_unix = int((datetime.now(timezone('UTC')) - timedelta(days=5)).timestamp())
     scan_params = {
-        'FilterExpression': Attr('LastUpdated').lt(cutoff_unix) & Attr('isActive').eq(0)
+        'FilterExpression': Attr('isActive').eq(0)
     }
-    while True:
-        # Perform the scan operation
-        response = table.scan(**scan_params)
-        # Iterate over the matching items and delete each one
-        for item in response['Items']:
-            table.delete_item(
-                Key={
-                    'EventID': str(item['EventID'])
-                }
-            )
-        # If the scan returned a LastEvaluatedKey, continue the scan from where it left off
-        if 'LastEvaluatedKey' in response:
-            scan_params['ExclusiveStartKey'] = response['LastEvaluatedKey']
-        else:
-            # If no LastEvaluatedKey was returned, the scan has completed and we can break from the loop
-            break
+    with table.batch_writer() as batch:
+        for response in _scan_pages(scan_params):
+            for item in response['Items']:
+                if item.get('isActive') != 0:
+                    continue
+                updated_unix = _item_updated_unix(item)
+                if updated_unix is None or updated_unix >= cutoff_unix:
+                    continue
+                batch.delete_item(Key={'EventID': str(item['EventID'])})
 
 def get_last_execution_day():
     response = table.query(
