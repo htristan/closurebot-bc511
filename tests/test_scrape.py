@@ -170,6 +170,43 @@ def test_cleanup_old_events(sample_db_items):
             assert 'Item' not in response
 
 @mock_aws
+def test_cleanup_uses_iso_updated_and_keeps_recent_rows():
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table = dynamodb.create_table(
+        TableName='test-db',
+        KeySchema=[{'AttributeName': 'EventID', 'KeyType': 'HASH'}],
+        AttributeDefinitions=[{'AttributeName': 'EventID', 'AttributeType': 'S'}],
+        BillingMode='PAY_PER_REQUEST'
+    )
+    now = datetime.now(timezone('UTC'))
+    old_iso = (now - timedelta(days=8)).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    recent_iso = (now - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    table.put_item(Item={'EventID': 'old-inactive', 'isActive': 0, 'updated': old_iso})
+    table.put_item(Item={'EventID': 'recent-inactive', 'isActive': 0, 'updated': recent_iso})
+    table.put_item(Item={'EventID': 'old-active', 'isActive': 1, 'updated': old_iso})
+    table.put_item(Item={'EventID': 'unparsed', 'isActive': 0, 'updated': 'not-a-timestamp'})
+    table.put_item(Item={
+        'EventID': 'numeric-wins',
+        'isActive': 0,
+        'updated': old_iso,
+        'LastUpdated': Decimal(str(int(now.timestamp()))),
+    })
+    table.put_item(Item={'EventID': 'LastCleanup', 'LastExecutionDay': now.date().isoformat()})
+
+    with patch('scrape.table', table):
+        cleanup_old_events()
+
+    def exists(event_id):
+        return 'Item' in table.get_item(Key={'EventID': event_id})
+
+    assert not exists('old-inactive')
+    assert exists('recent-inactive')
+    assert exists('old-active')
+    assert exists('unparsed')
+    assert exists('numeric-wins')
+    assert exists('LastCleanup')
+
+@mock_aws
 def test_close_recent_events(sample_db_items):
     # Setup mock DynamoDB
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -381,6 +418,41 @@ def test_new_events_use_both_alert_paths(mock_post, mock_fetch, mock_dynamodb_ta
     posted_ids = [call.args[0]["id"] for call in mock_post.call_args_list]
     assert posted_ids == ["drivebc.ca/RIDE-closed", "drivebc.ca/RIDE-keyword"]
     assert all(call.args[1] == "closure" for call in mock_post.call_args_list)
+
+@patch('scrape.get_last_execution_day', return_value='2099-01-01')
+@patch('scrape.fetch_all_events')
+@patch('scrape.post_to_discord')
+def test_non_closures_do_not_query_dynamo(mock_post, mock_fetch, _last_day, mock_dynamodb_table):
+    tracked = _event(id="drivebc.ca/RIDE-tracked")
+    fresh = _event(id="drivebc.ca/RIDE-fresh")
+    noise = [
+        _event(
+            id=f"drivebc.ca/RIDE-open-{i}",
+            severity="MINOR",
+            description="Slow traffic.",
+            roads=[{"name": "Highway 1", "direction": "E", "state": "ALL_LANES_OPEN"}],
+        )
+        for i in range(20)
+    ]
+    mock_fetch.return_value = {"events": [tracked, fresh, *noise]}
+    mock_dynamodb_table.scan.return_value = {"Items": [{
+        "EventID": tracked["id"],
+        "isActive": 1,
+        "updated": tracked["updated"],
+        "lastTouched": Decimal("1000000000"),
+        "geography": {"type": "Point", "coordinates": [Decimal("-121.44"), Decimal("49.38")]},
+        "DetectedPolygon": "LowerMainland",
+    }]}
+
+    with patch('scrape.table', mock_dynamodb_table):
+        check_and_post_events()
+
+    mock_dynamodb_table.query.assert_not_called()
+    assert mock_dynamodb_table.scan.call_count == 1
+    assert [call.args[0]["id"] for call in mock_post.call_args_list] == [fresh["id"]]
+    assert mock_dynamodb_table.update_item.call_count == 1
+    assert mock_dynamodb_table.update_item.call_args.kwargs["Key"] == {"EventID": tracked["id"]}
+    assert [call.kwargs["Item"]["EventID"] for call in mock_dynamodb_table.put_item.call_args_list] == [fresh["id"]]
 
 @mock_aws
 @patch('scrape.post_to_discord')
